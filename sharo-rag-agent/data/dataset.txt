@@ -1,0 +1,35 @@
+Detailed Dataset Description for the "Sharko" Project
+​The "Sharko" project's predictive capabilities are built upon a meticulously constructed and preprocessed dataset, integrating diverse sources of satellite-derived environmental observations with global biological occurrence records. The final dataset is designed to provide a comprehensive view of the oceanic conditions that correlate with shark presence.
+​1. Data Sources
+​Our dataset draws from two primary categories:
+​Satellite-Derived Environmental Data: This forms the backbone of our predictive features, providing continuous, consistent coverage of key oceanographic parameters.
+​Sea Surface Temperature (SST): Sourced from NASA's Moderate Resolution Imaging Spectroradiometer (MODIS) aboard the Aqua and Terra satellites. We utilized 8-day composite, Level 3 data, which offers global coverage at a resolution of approximately 4 km, minimizing cloud cover and providing consistent temporal snapshots.
+​Chlorophyll-a Concentration (Chlor_a): Also obtained from NASA's MODIS (Aqua/Terra) missions, utilizing 8-day composite, Level 3 data. Chlorophyll-a serves as a crucial proxy for primary productivity in the ocean, indicating the abundance of phytoplankton, which forms the base of the marine food web. Resolution is approximately 4 km.
+​Sea Surface Height Anomaly (SSHA): Acquired from the Copernicus Marine Service (via the AVISO product), integrating data from multiple altimetry missions. This dataset provides global, 7-day or daily gridded data (typically at 0.25-degree resolution), representing deviations from the mean sea surface height, which are critical for identifying dynamic features like eddies and currents.
+​Biological Occurrence Data: This provides the target variable (shark presence/absence) for our supervised learning models.
+​Global Shark Occurrence Data (Occurrence.tsv): Sourced from the Ocean Biodiversity Information System (OBIS), a global open-access data portal for marine species distributions. This comprehensive dataset aggregates millions of records from various research projects, surveys, and citizen science initiatives, detailing observations of marine species, including sharks.
+​2. Data Preprocessing & Cleaning
+​The raw data from these diverse sources required extensive preprocessing and cleaning to create a unified, high-quality dataset suitable for machine learning.
+​Environmental Data Preprocessing:
+​Temporal and Spatial Alignment: Satellite data, initially provided in NetCDF or HDF formats, was loaded using xarray and numpy. Data was carefully aligned temporally (e.g., matching 8-day composites to specific observation dates) and spatially (interpolating to a consistent grid or extracting values at specific coordinates).
+​Missing Value Imputation/Handling: Areas with persistent cloud cover in optical satellite data (SST, Chlorophyll) resulted in NaN values. These were handled by temporal and spatial interpolation for our specific prediction points to ensure complete feature sets.
+​Feature Engineering (Temporal): From the eventDate of biological occurrences, we extracted day_of_year and transformed it into sinusoidal (day_sin) and cosinusoidal (day_cos) components. This captures the cyclic nature of seasonality without imposing an artificial linear relationship, allowing the models to learn temporal patterns (e.g., breeding seasons, migration patterns).
+​Biological Occurrence Data Cleaning (Occurrence.tsv):
+​Column Selection: We selectively extracted essential columns: occurrenceID, eventDate, decimalLatitude, decimalLongitude, and occurrenceStatus.
+​Filtering for Sharks: The dataset was filtered to include only records pertaining to the Chondrichthyes class (cartilaginous fish, including sharks, rays, and chimaeras), and further refined to focus on recognized shark species.
+​Geospatial Cleaning: Records with missing or invalid decimalLatitude or decimalLongitude were removed. Outlier coordinates (e.g., outside valid ocean bounds, on land) were also identified and removed.
+​Temporal Filtering: Records outside our target study period (e.g., pre-2020) were excluded, aligning with the availability of consistent satellite data.
+​Deduplication: Duplicate records (identical occurrenceID, lat, lon, date) were removed to prevent bias.
+​Handling occurrenceStatus: The occurrenceStatus column was crucial for creating our target variable. "Present" records were labeled as 1 (presence). For "Absent" records or where the status was unclear, we applied environmental conditions to define "absence" points. For every confirmed presence, we generated a corresponding set of "pseudo-absence" points (records labeled 0) within a reasonable spatial and temporal proximity but far enough to represent a non-habitat, ensuring a balanced dataset for classification. This is standard practice in species distribution modeling.
+​3. Final Dataset Composition
+​The final integrated dataset for model training consisted of a combination of presence and pseudo-absence records, each enriched with the corresponding environmental features.
+​For each entry, the dataset included:
+​decimalLatitude
+​decimalLongitude
+​day_sin
+​day_cos
+​sst (Sea Surface Temperature)
+​ssha (Sea Surface Height Anomaly)
+​chlor_a (Chlorophyll-a Concentration)
+​presence (Target variable: 1 for shark presence, 0 for pseudo-absence)
+​This carefully constructed dataset ensures that our AI models learn the complex, multi-dimensional environmental signatures associated with shark occurrence, enabling robust and scientifically plausible predictions

@@ -1,0 +1,258 @@
+Project overview
+
+Sharko (backend) is a FastAPI-based ML inference and geospatial processing service that predicts oceanographic variables and shark presence over polygons, clusters predicted hotspots into polygons, and serves results as GeoJSON. It also exposes a simple RAG Q&A endpoint over local project documentation.
+
+
+
+Core capabilities
+
+- Environmental ML predictions: predicts SST (sea surface temperature), SSH (sea surface height anomaly), and Chlorophyll-a (chla) using pre-trained joblib models.
+
+- Shark presence inference: composes environmental predictions to estimate shark presence.
+
+- Spatial sampling: generates points within input polygons (random/grid/adaptive), with temporal cyclic features from date.
+
+- Clustering/hotspot detection: DBSCAN-based clustering of predicted points into convex-hull polygons, returned as GeoJSON.
+
+- Batch outputs: saves generated points and prediction results to CSV/Parquet for faster reloads in subsequent runs.
+
+- RAG Q&A: local-embeddings-powered RetrievalQA over project text files, with Gemini used only as the final LLM.
+
+
+
+Repository layout
+
+- index.py: end-to-end prediction pipelines, clustering, and file I/O.
+
+- api.py: FastAPI app exposing health, prediction, and RAG endpoints.
+
+- models/: pre-trained .joblib models (sst.joblib, ssh.joblib, chl.joblib, shark_presence.joblib).
+
+- rag_chain.py: builds the RAG chain (local embeddings via HuggingFace + Gemini chat).
+
+- requirements.txt: runtime dependencies.
+
+- Data inputs (for RAG and geospatial): data/frontend.txt, data/backend.txt, data/dataset.txt, data/model_traning.txt, plus polygon files such as initial_zone_1_epsilon.geojson.
+
+
+
+ML pipeline details (index.py)
+
+- Model loading: load_models() reads joblib models from models/.
+
+  - sst: predicts SST from features [lat, lon, day_sin, day_cos].
+
+  - ssh: predicts SSH from features [lat, lon, day_sin, day_cos, predicted_sst].
+
+  - chla: predicts chlorophyll-a from [lat, lon, day_sin, day_cos, predicted_sst, predicted_ssh].
+
+  - shark: predicts shark presence from [lat, lon, day_sin, day_cos, sst, ssha, chlor_a].
+
+- Temporal features: prepare_temporal_features(dates) encodes day-of-year as cyclic sin/cos.
+
+- Point generation over polygons:
+
+  - generate_random_points_in_polygon(), generate_grid_points_in_polygon(), and generate_prediction_points() turn input polygons (from load_geojson_polygons(path)) into sampling points with date and polygon_id.
+
+  - “adaptive” mode scales point count by polygon area.
+
+- Batch prediction: batch_predict(input_data, models):
+
+  - Computes temporal features, builds base features.
+
+  - Predicts SST → augments features → predicts SSH → augments features → predicts chla.
+
+  - Builds final features and predicts predicted_shark_presence.
+
+  - Returns a DataFrame with original inputs + all predicted columns: predicted_sst, predicted_ssh, predicted_chla, predicted_shark_presence, day_sin, day_cos.
+
+- Outputs:
+
+  - Saves prediction_points.csv and prediction_results.csv (and optionally Parquet variants) for fast reload in future runs.
+
+- Clustering and GeoJSON:
+
+  - Presence clusters: DBSCAN on all coordinates, convex-hull per cluster as polygons, returned as a GeoJSON FeatureCollection.
+
+  - Habitat clusters (optional): filters by environmental ranges (e.g., SST, SSH, chla or shark-specific thresholds) before clustering.
+
+  - Feature properties include cluster_id. Final output is a FeatureCollection (or two if presence and habitat are both produced).
+
+
+
+Public functions (index.py)
+
+- batch_predict(input_data, models) -> DataFrame
+
+- predict_shark_presence(geojson_file='initial_zone_1_epsilon.geojson', points_per_polygon=200, prediction_date='2030-05-14', point_generation_method='adaptive', epsilon=1, min_samples=5) -> GeoJSON or list-of-records
+
+  - Loads (or generates) prediction points, runs batch prediction, performs DBSCAN clustering on all_coords and returns FeatureCollection polygons (presence).
+
+  - In some flows, returns JSON records of results early (when used as a data API).
+
+- predict_shark_habitat(geojson_file='initial_zone_1_epsilon.geojson', ..., shark_name="") -> GeoJSON
+
+  - Loads prediction_points.parquet, runs batch prediction, filters by shark-specific temperature (and SSH) ranges loaded from sharks.json, clusters filtered points, returns FeatureCollection polygons.
+
+
+
+API (api.py)
+
+- Framework: FastAPI with CORS enabled.
+
+- Health:
+
+  - GET /health: loads models and returns status and model names.
+
+  - GET /: basic root message (HEAD supported if enabled).
+
+- Prediction:
+
+  - GET /predict/presence?date=YYYY-MM-DD:
+
+    - Calls predict_shark_presence(...) with internal defaults:
+
+      - geojson_file="initial_zone_1_epsilon.geojson", points_per_polygon=200, point_generation_method="adaptive", epsilon=2.0, min_samples=4.
+
+    - Returns PredictionResponse with presence_geojson_data.
+
+  - GET /predict/habitat?date=YYYY-MM-DD&shark_name=Name:
+
+    - Calls predict_shark_habitat(...) (uses thresholds from sharks.json), returns habitat_geojson_data.
+
+  - GET /predict/location?lat=...&lon=...&date=...:
+
+    - Single-point prediction; returns numeric values for shark_presence, sst, ssh, chla.
+
+- RAG Q&A:
+
+  - Request model:
+
+    - Question { context: list[str], question: str }
+
+  - POST /ask:
+
+    - Lazy-loads rag_chain on first call (get_rag_chain()), then runs chain.run(full_query) where full_query concatenates request context and question.
+
+    - Returns { "response": ... }. Errors yield 503 if initialization fails.
+
+  - RAG build (rag_chain.py):
+
+    - Loads text from data/frontend.txt, data/backend.txt, data/dataset.txt, data/model_traning.txt.
+
+    - Splits into chunks with RecursiveCharacterTextSplitter(chunk_size=200, overlap=50).
+
+    - Embeddings: HuggingFace sentence-transformers/all-MiniLM-L6-v2 (local, CPU by default).
+
+    - Vector store: Chroma from documents & embeddings.
+
+    - LLM: ChatGoogleGenerativeAI (Gemini 2.5 Flash) used for the final answer only.
+
+    - Prompt: instructs the assistant to answer only project-related questions with given Context and Question.
+
+
+
+Data and I/O
+
+- Inputs:
+
+  - GeoJSON polygons (e.g., initial_zone_1_epsilon.geojson), loaded via GeoPandas.
+
+  - Optional shark metadata (sharks.json) with species-specific environmental thresholds.
+
+- Outputs:
+
+  - GeoJSON FeatureCollections for cluster polygons.
+
+  - CSV/Parquet files for prediction_points and prediction_results to support batch workflows and faster reloads.
+
+
+
+Geospatial processing
+
+- CRS handling:
+
+  - Area calc via GeoPandas reprojected to suitable projections (3857 preferred; Mollweide/Eckert IV fallbacks). Falls back to spherical approximation if projections fail.
+
+- Geometry:
+
+  - Points generated within polygons using rejection sampling or grid.
+
+  - Clusters → convex hull polygons via Shapely MultiPoint(...).convex_hull.
+
+
+
+Dependencies and considerations
+
+- ML & DS: numpy, pandas, scikit-learn, joblib, lightgbm.
+
+- Geospatial: geopandas, shapely, pyproj, fiona, rtree.
+
+- API: fastapi, uvicorn, pydantic.
+
+- Storage/perf: pyarrow for Parquet (fast loading).
+
+- RAG: langchain, langchain-community, langchain-huggingface, sentence-transformers, chromadb, python-dotenv, langchain-google-genai (Gemini).
+
+- OS/env: Windows development; ensure GDAL/GEOS/PROJ-backed wheels are available for geopandas.
+
+- Model inputs are numeric; temporal features must be present; date format must be %Y-%m-%d.
+
+
+
+Typical flows
+
+- Presence map:
+
+  1 Upload/provide polygon GeoJSON.
+
+  2 Generate points in polygons (adaptive by area).
+
+  3 Predict SST → SSH → chla → shark presence.
+
+  4 Cluster all points; return cluster polygons as GeoJSON.
+
+- Species habitat map:
+
+  1 Load precomputed points and predictions (Parquet/CSV).
+
+  2 Filter by species thresholds from sharks.json.
+
+  3 Cluster filtered points and return habitat polygons.
+
+
+
+Limitations and assumptions
+
+- Models expect specific feature columns and ordering; pipelines construct those features internally.
+
+- Clustering parameters (epsilon, min_samples) are static defaults but can be tuned in code.
+
+- Some endpoints can return raw records JSON (used as a data API) rather than GeoJSON depending on code path; the main exposed endpoints return GeoJSON polygons.
+
+- RAG uses local embeddings but still requires a valid Google Gemini key for final LLM calls.
+
+
+
+Deployment
+
+- Install from requirements.txt. On Linux, system libs for GeoPandas (GEOS/PROJ/GDAL) may be needed or use manylinux wheels.
+
+- Start: python api.py (Uvicorn runs on 0.0.0.0:8000).
+
+- Health checks:
+
+  - GET /health (and HEAD if enabled).
+
+- Example predictions:
+
+  - GET /predict/presence?date=2030-05-14
+
+  - GET /predict/habitat?date=2030-05-14&shark_name=Whitespotted%20Bamboshark
+
+  - GET /predict/location?lat=40.1&lon=74.1&date=2030-05-14
+
+- RAG:
+
+  - POST /ask with JSON body { "context": ["..."], "question": "..." }.
+

@@ -1,0 +1,28 @@
+# Ignore all data directories
+chlorophyll_data/
+chlorophyll_data_8day/
+final_data/
+final_model_data/
+satellite_data/
+satellite_data_sst/
+ssha-data/
+sss-data/
+sst_data/
+sst_data_8day/
+check_occur.py/
+SSS_New/
+SSHA_New/
+tem.py/
+
+# Ignore large data and output files by their extension
+*.nc
+*.tsv
+*.csv
+*.csv.gz
+
+# Ignore credential files for security
+.netrc
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
