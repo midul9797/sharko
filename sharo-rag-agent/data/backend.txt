@@ -1,258 +1,169 @@
 Project overview
 
-Sharko (backend) is a FastAPI-based ML inference and geospatial processing service that predicts oceanographic variables and shark presence over polygons, clusters predicted hotspots into polygons, and serves results as GeoJSON. It also exposes a simple RAG Q&A endpoint over local project documentation.
+Sharko (backend) is a FastAPI-based ML inference service that predicts shark habitat suitability around the Australian coastline (lon 110-160E, lat 9-46S) from real satellite ocean data, an official ocean forecast, and long-term climatology, then clusters the predicted hotspots into polygons and serves results as GeoJSON. It also exposes a simple RAG Q&A endpoint over local project documentation.
 
 
 
 Core capabilities
 
-- Environmental ML predictions: predicts SST (sea surface temperature), SSH (sea surface height anomaly), and Chlorophyll-a (chla) using pre-trained joblib models.
+- Species-specific habitat prediction: trained classifiers for Tiger Shark, Bull Shark, Great White Shark, and an "any shark" (all species pooled) model.
 
-- Shark presence inference: composes environmental predictions to estimate shark presence.
+- Any-date prediction: the same API answers for a date in the past, the next ~9 days, up to 90 days ahead, or years into the future (e.g. 2030), by automatically switching between four data sources depending on how far ahead the date is (see "Prediction modes" below).
 
-- Spatial sampling: generates points within input polygons (random/grid/adaptive), with temporal cyclic features from date.
+- Known-range gating: a species is only predicted as present within 500 km of where it has actually been recorded (2020-2026); this stops the model claiming habitat somewhere the species has never been seen just because the water conditions look similar.
 
-- Clustering/hotspot detection: DBSCAN-based clustering of predicted points into convex-hull polygons, returned as GeoJSON.
+- Clustering/hotspot detection: DBSCAN-based clustering of grid cells whose predicted suitability clears that species' tuned threshold, convex-hulled into polygons and returned as GeoJSON, in the same response shape the frontend has always consumed.
 
-- Batch outputs: saves generated points and prediction results to CSV/Parquet for faster reloads in subsequent runs.
-
-- RAG Q&A: local-embeddings-powered RetrievalQA over project text files, with Gemini used only as the final LLM.
+- RAG Q&A: local-embeddings-powered retrieval over project text files, with Gemini used only as the final LLM.
 
 
 
-Repository layout
+Repository layout (sharko-api)
 
-- index.py: end-to-end prediction pipelines, clustering, and file I/O.
+- app.py: FastAPI app exposing health and prediction endpoints.
 
-- api.py: FastAPI app exposing health, prediction, and RAG endpoints.
+- au_predict.py: adapter that calls the Australia predictor and reshapes its output back into the API's existing response format, so no frontend changes were needed.
 
-- models/: pre-trained .joblib models (sst.joblib, ssh.joblib, chl.joblib, shark_presence.joblib).
+- au/: the Australia prediction package.
 
-- rag_chain.py: builds the RAG chain (local embeddings via HuggingFace + Gemini chat).
+  - predictor.py: SharkoPredictor, the main prediction engine (see below).
+
+  - climatology.py: typical ocean conditions per place and week of the year, used for far-future predictions.
+
+  - features.py: shared ocean-feature extraction (satellite data, bathymetry, season), used identically at training and prediction time so the model always sees the same inputs it was trained on.
+
+  - config.py: study-area bounds and shared settings.
+
+  - models/: trained model bundles: any_model.joblib, bull_model.joblib, tiger_model.joblib, white_model.joblib (daily models), and the same four again under models/seasonal/ (long-range models trained on typical conditions).
+
+  - data/climatology/clim_all.nc: typical conditions per 0.1-degree ocean cell and week of year (2020-2026 average).
+
+  - data/forecast/forecast.nc and bias.nc: the latest Copernicus ocean forecast (about 9 days ahead), bias-corrected against satellite measurements.
+
+  - data/ocean/bathymetry.nc: depth and distance to coast (NOAA ETOPO).
+
+  - data/sharks_australia.csv: real 2020-2026 shark records, used for the known-range check.
+
+- index.py, sharks.json, initial_zone_1_epsilon.geojson, prediction_points.parquet, and the original models/sst.joblib, ssh.joblib, chloro_model_log_independent_tuned.joblib, shark_presence.joblib: the original chained-regressor pipeline that covered the whole world. Still present in the repository for reference but no longer called by any live endpoint; superseded by au/ and au_predict.py.
 
 - requirements.txt: runtime dependencies.
 
-- Data inputs (for RAG and geospatial): data/frontend.txt, data/backend.txt, data/dataset.txt, data/model_traning.txt, plus polygon files such as initial_zone_1_epsilon.geojson.
+
+
+Prediction pipeline details (au/predictor.py)
+
+- SharkoPredictor loads the four daily models, the four seasonal models, the climatology grid, the latest forecast (if present), and the real satellite archive (if present, used for past dates) once at startup.
+
+- Prediction modes, chosen automatically from the requested date:
+
+  - observed: the requested date has real satellite data on disk, so the daily models run on the real SST, sea level, currents and chlorophyll of that exact day.
+
+  - forecast: the date falls within the roughly 9-day Copernicus ocean forecast window, so the daily models run on the bias-corrected forecast.
+
+  - outlook: up to 90 days after the last known day, so the seasonal models run on typical conditions for that place and week, adjusted by how unusual the most recently known conditions were, with that adjustment fading out the further ahead the date is.
+
+  - typical: any date further out (for example a 2030 date), so the seasonal models run on pure typical conditions for that place and week (2020-2026 average). A cooler-year/warmer-year range is also given, based on that week's usual year-to-year variability.
+
+- Model inputs (10 features, deliberately excluding latitude/longitude so the model learns ocean conditions rather than "where the sensors or divers are"): sea temperature, temperature front (a spatial gradient), chlorophyll (log10), sea level anomaly, dynamic topography, current speed, depth, distance to coast, and season as sin/cos of day-of-year.
+
+- Depth, distance to coast and season are always known exactly; only the six ocean variables change with the prediction mode.
+
+- Known-range check: a nearest-neighbour lookup against each species' real 2020-2026 sightings; predictions more than 500 km from any recorded sighting of that species are forced to zero regardless of how suitable the water looks.
 
 
 
-ML pipeline details (index.py)
+Public functions (au_predict.py)
 
-- Model loading: load_models() reads joblib models from models/.
+- predict_presence_geojson(date): grid-predicts the "any shark" model across the whole Australian study area, thresholds it, clusters the surviving cells with DBSCAN, convex-hulls each cluster, and returns a GeoJSON FeatureCollection. Used by /predict/presence.
 
-  - sst: predicts SST from features [lat, lon, day_sin, day_cos].
+- predict_habitat_geojson(date, shark_name): the same, scoped to one species (Tiger Shark, Bull Shark or Great White Shark). Any other species name has no trained model and returns None, which the endpoint reports as "no valid clusters found", the same response the frontend already handles for an empty result.
 
-  - ssh: predicts SSH from features [lat, lon, day_sin, day_cos, predicted_sst].
-
-  - chla: predicts chlorophyll-a from [lat, lon, day_sin, day_cos, predicted_sst, predicted_ssh].
-
-  - shark: predicts shark presence from [lat, lon, day_sin, day_cos, sst, ssha, chlor_a].
-
-- Temporal features: prepare_temporal_features(dates) encodes day-of-year as cyclic sin/cos.
-
-- Point generation over polygons:
-
-  - generate_random_points_in_polygon(), generate_grid_points_in_polygon(), and generate_prediction_points() turn input polygons (from load_geojson_polygons(path)) into sampling points with date and polygon_id.
-
-  - “adaptive” mode scales point count by polygon area.
-
-- Batch prediction: batch_predict(input_data, models):
-
-  - Computes temporal features, builds base features.
-
-  - Predicts SST → augments features → predicts SSH → augments features → predicts chla.
-
-  - Builds final features and predicts predicted_shark_presence.
-
-  - Returns a DataFrame with original inputs + all predicted columns: predicted_sst, predicted_ssh, predicted_chla, predicted_shark_presence, day_sin, day_cos.
-
-- Outputs:
-
-  - Saves prediction_points.csv and prediction_results.csv (and optionally Parquet variants) for fast reload in future runs.
-
-- Clustering and GeoJSON:
-
-  - Presence clusters: DBSCAN on all coordinates, convex-hull per cluster as polygons, returned as a GeoJSON FeatureCollection.
-
-  - Habitat clusters (optional): filters by environmental ranges (e.g., SST, SSH, chla or shark-specific thresholds) before clustering.
-
-  - Feature properties include cluster_id. Final output is a FeatureCollection (or two if presence and habitat are both produced).
+- predict_location(lat, lon, date): single-point prediction, reshaped into {coordinates, date, predictions: {shark_presence, sst, ssh, chla}}. Used by /predict/location. Returns an error for points outside the Australian study area (110-160E / 9-46S) or with no ocean data, such as on land.
 
 
 
-Public functions (index.py)
-
-- batch_predict(input_data, models) -> DataFrame
-
-- predict_shark_presence(geojson_file='initial_zone_1_epsilon.geojson', points_per_polygon=200, prediction_date='2030-05-14', point_generation_method='adaptive', epsilon=1, min_samples=5) -> GeoJSON or list-of-records
-
-  - Loads (or generates) prediction points, runs batch prediction, performs DBSCAN clustering on all_coords and returns FeatureCollection polygons (presence).
-
-  - In some flows, returns JSON records of results early (when used as a data API).
-
-- predict_shark_habitat(geojson_file='initial_zone_1_epsilon.geojson', ..., shark_name="") -> GeoJSON
-
-  - Loads prediction_points.parquet, runs batch prediction, filters by shark-specific temperature (and SSH) ranges loaded from sharks.json, clusters filtered points, returns FeatureCollection polygons.
-
-
-
-API (api.py)
+API (app.py)
 
 - Framework: FastAPI with CORS enabled.
 
 - Health:
 
-  - GET /health: loads models and returns status and model names.
+  - GET /health: loads the legacy global models and reports status and model names.
 
-  - GET /: basic root message (HEAD supported if enabled).
+  - GET /: basic root message.
 
-- Prediction:
+- Prediction (response shapes are unchanged from the original API, so the existing frontend needed no changes):
 
-  - GET /predict/presence?date=YYYY-MM-DD:
+  - GET /predict/presence?date=YYYY-MM-DD: general "any shark" habitat zones across Australian waters. Returns a PredictionResponse with presence_geojson_data.
 
-    - Calls predict_shark_presence(...) with internal defaults:
+  - GET /predict/habitat?date=YYYY-MM-DD&shark_name=Name: species-specific habitat zones. Tiger Shark, Bull Shark and Great White Shark have real models; any other species name returns no clusters. Returns habitat_geojson_data.
 
-      - geojson_file="initial_zone_1_epsilon.geojson", points_per_polygon=200, point_generation_method="adaptive", epsilon=2.0, min_samples=4.
-
-    - Returns PredictionResponse with presence_geojson_data.
-
-  - GET /predict/habitat?date=YYYY-MM-DD&shark_name=Name:
-
-    - Calls predict_shark_habitat(...) (uses thresholds from sharks.json), returns habitat_geojson_data.
-
-  - GET /predict/location?lat=...&lon=...&date=...:
-
-    - Single-point prediction; returns numeric values for shark_presence, sst, ssh, chla.
+  - GET /predict/location?lat=...&lon=...&date=...: single-point prediction; returns numeric values for shark_presence, sst, ssh, chla. Returns HTTP 400 if the point falls outside Australian waters.
 
 - RAG Q&A:
 
-  - Request model:
-
-    - Question { context: list[str], question: str }
-
-  - POST /ask:
-
-    - Lazy-loads rag_chain on first call (get_rag_chain()), then runs chain.run(full_query) where full_query concatenates request context and question.
-
-    - Returns { "response": ... }. Errors yield 503 if initialization fails.
-
-  - RAG build (rag_chain.py):
-
-    - Loads text from data/frontend.txt, data/backend.txt, data/dataset.txt, data/model_traning.txt.
-
-    - Splits into chunks with RecursiveCharacterTextSplitter(chunk_size=200, overlap=50).
-
-    - Embeddings: HuggingFace sentence-transformers/all-MiniLM-L6-v2 (local, CPU by default).
-
-    - Vector store: Chroma from documents & embeddings.
-
-    - LLM: ChatGoogleGenerativeAI (Gemini 2.5 Flash) used for the final answer only.
-
-    - Prompt: instructs the assistant to answer only project-related questions with given Context and Question.
+  - POST /ask: Question { context: list[tuple[str, str]], question: str }. Lazily loads the RAG chain on first call, then answers using the project text files described here plus Gemini as the final LLM.
 
 
 
 Data and I/O
 
-- Inputs:
+- Prediction inputs: real Copernicus Marine satellite data for past dates, the official Copernicus ocean forecast for the next ~9 days, and a precomputed climatology of typical conditions for anything further ahead, plus NOAA bathymetry (depth, distance to coast) and real 2020-2026 shark records for the known-range check.
 
-  - GeoJSON polygons (e.g., initial_zone_1_epsilon.geojson), loaded via GeoPandas.
-
-  - Optional shark metadata (sharks.json) with species-specific environmental thresholds.
-
-- Outputs:
-
-  - GeoJSON FeatureCollections for cluster polygons.
-
-  - CSV/Parquet files for prediction_points and prediction_results to support batch workflows and faster reloads.
-
-
-
-Geospatial processing
-
-- CRS handling:
-
-  - Area calc via GeoPandas reprojected to suitable projections (3857 preferred; Mollweide/Eckert IV fallbacks). Falls back to spherical approximation if projections fail.
-
-- Geometry:
-
-  - Points generated within polygons using rejection sampling or grid.
-
-  - Clusters → convex hull polygons via Shapely MultiPoint(...).convex_hull.
+- Outputs: GeoJSON FeatureCollections of cluster polygons for the presence/habitat endpoints, or a numeric prediction with an ocean-conditions breakdown for the location endpoint.
 
 
 
 Dependencies and considerations
 
-- ML & DS: numpy, pandas, scikit-learn, joblib, lightgbm.
+- ML and data science: numpy, pandas, scikit-learn, joblib, lightgbm, scipy.
 
-- Geospatial: geopandas, shapely, pyproj, fiona, rtree.
+- Ocean data: xarray, netCDF4, for reading the climatology, forecast and bathymetry NetCDF files.
+
+- Geospatial: shapely, used for the convex-hull clustering step; geopandas, pyproj, fiona and rtree are only used by the legacy global pipeline and are unused by the live endpoints.
 
 - API: fastapi, uvicorn, pydantic.
 
-- Storage/perf: pyarrow for Parquet (fast loading).
-
 - RAG: langchain, langchain-community, langchain-huggingface, sentence-transformers, chromadb, python-dotenv, langchain-google-genai (Gemini).
 
-- OS/env: Windows development; ensure GDAL/GEOS/PROJ-backed wheels are available for geopandas.
-
-- Model inputs are numeric; temporal features must be present; date format must be %Y-%m-%d.
+- The study area is fixed to Australian waters: lon 110-160E, lat 9-46S. Requests outside that box return no data.
 
 
 
 Typical flows
 
-- Presence map:
+- Presence map: pick a date, the predictor scores the "any shark" model across the whole Australia grid using whichever data source fits that date (observed, forecast, outlook or typical), cells above the model's threshold are clustered into polygons, and GeoJSON is returned.
 
-  1 Upload/provide polygon GeoJSON.
-
-  2 Generate points in polygons (adaptive by area).
-
-  3 Predict SST → SSH → chla → shark presence.
-
-  4 Cluster all points; return cluster polygons as GeoJSON.
-
-- Species habitat map:
-
-  1 Load precomputed points and predictions (Parquet/CSV).
-
-  2 Filter by species thresholds from sharks.json.
-
-  3 Cluster filtered points and return habitat polygons.
+- Species habitat map: the same, scoped to one species' model and its own threshold. Only Tiger Shark, Bull Shark and Great White Shark currently have a trained model, in addition to the pooled "any shark" model.
 
 
 
 Limitations and assumptions
 
-- Models expect specific feature columns and ordering; pipelines construct those features internally.
+- Only four species have real trained models today: Tiger Shark, Bull Shark, Great White Shark, and the pooled "any shark" model. Every other species previously listed for the worldwide version has no dedicated Australia model and returns no results.
 
-- Clustering parameters (epsilon, min_samples) are static defaults but can be tuned in code.
+- Predictions are confined to Australian coastal waters; a location or clustering request for anywhere else returns no data.
 
-- Some endpoints can return raw records JSON (used as a data API) rather than GeoJSON depending on code path; the main exposed endpoints return GeoJSON polygons.
+- The forecast data needs to be refreshed roughly daily to stay within its ~9-day window. If it goes stale, dates that would have used "forecast" mode fall back automatically to the climatology-based "outlook" or "typical" modes instead, so the API keeps working, just with a slightly lower-confidence input source.
 
-- RAG uses local embeddings but still requires a valid Google Gemini key for final LLM calls.
+- RAG uses local embeddings but still requires a valid Google Gemini key for the final LLM call.
 
 
 
 Deployment
 
-- Install from requirements.txt. On Linux, system libs for GeoPandas (GEOS/PROJ/GDAL) may be needed or use manylinux wheels.
+- Install from requirements.txt.
 
-- Start: python api.py (Uvicorn runs on 0.0.0.0:8000).
+- Start: python app.py (Uvicorn on 0.0.0.0:8000; the Hugging Face Space runs it on port 7860 via Docker).
 
-- Health checks:
-
-  - GET /health (and HEAD if enabled).
+- Health check: GET /health.
 
 - Example predictions:
 
-  - GET /predict/presence?date=2030-05-14
+  - GET /predict/presence?date=2030-01-15
 
-  - GET /predict/habitat?date=2030-05-14&shark_name=Whitespotted%20Bamboshark
+  - GET /predict/habitat?date=2030-01-15&shark_name=Tiger%20Shark
 
-  - GET /predict/location?lat=40.1&lon=74.1&date=2030-05-14
+  - GET /predict/location?lat=-33.9&lon=151.3&date=2030-01-15
 
-- RAG:
-
-  - POST /ask with JSON body { "context": ["..."], "question": "..." }.
-
+- RAG: POST /ask with JSON body { "context": [["q1", "a1"]], "question": "..." }.

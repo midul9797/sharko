@@ -1,51 +1,59 @@
-Detailed Description of the "Sharko" Predictive Model Stack
-​The "Sharko" project employs a sophisticated, multi-tiered machine learning model stack designed to sequentially predict future oceanographic conditions and then, based on these predictions, infer the probability of shark presence. This cascade architecture mirrors the natural dependencies within marine ecosystems and allows for robust, future-looking predictions.
-​1. Overall Architecture: A Predictive Cascade
-​Our system operates in two primary tiers:
-​Tier 1: Environmental Forecasting Models (Regression Models): Three independent regression models are trained to predict the key oceanographic features (SST, SSHA, Chlorophyll-a). These models learn the spatio-temporal dynamics of the ocean.
-​Tier 2: Shark Presence Prediction Model (Classification Model): The output predictions from Tier 1 (future SST, SSHA, Chlorophyll-a) are then fed, along with latitude, longitude, and seasonal components, into a final classification model. This model learns the complex relationships between these environmental conditions and the likelihood of shark presence.
-​This cascade approach is critical for our goal of future prediction, as it allows the entire system to forecast shark hotspots based on anticipated environmental states, not just historical correlations.
-​2. Tier 1: Environmental Forecasting Models
-​For each of the three environmental variables (SST, SSHA, Chlorophyll-a), we developed and fine-tuned a dedicated model.
-​Model Type:
-​Light Gradient Boosting Machine (LightGBM) Regressors: We selected LightGBM due to its efficiency, speed, and high performance on tabular data. Its gradient boosting framework is robust to various data distributions and capable of capturing complex non-linear relationships.  
-​Feature Set: Each environmental model was trained using geographical coordinates (latitude, longitude) and temporal features (day_sin, day_cos). Crucially, the SSHA and Chlorophyll-a models also incorporated the predicted SST from the previous step in the cascade, reflecting the real-world influence of temperature on other oceanographic processes.
-​SST Model Features: latitude, longitude, day_sin, day_cos
-​SSHA Model Features: latitude, longitude, day_sin, day_cos, predicted_sst
-​Chlorophyll-a Model Features: latitude, longitude, day_sin, day_cos, predicted_sst, predicted_ssha
-​Training Data: The models were trained on the entire historical environmental dataset (2020-2025), with the corresponding latitude, longitude, day_sin, and day_cos values.
-​Hyperparameter Tuning (Optuna):
-​Methodology: We employed Optuna, an open-source hyperparameter optimization framework, to systematically search for the best combination of parameters for each LightGBM regressor. Optuna uses an efficient pruning algorithm (e.g., TPE Sampler) to quickly converge on optimal solutions.  
-​Objective Function: The objective for Optuna was to minimize the Mean Squared Error (MSE) of the model on a validation set.
-​Key Parameters Optimized:
-​n_estimators: The number of boosting rounds (trees).
-​learning_rate: Step size shrinkage to prevent overfitting.  
-​num_leaves: Maximum number of leaves in one tree.
-​max_depth: Maximum tree depth.
-​min_child_samples: Minimum number of data needed in a child (leaf).
-​subsample: Fraction of samples to be randomly sampled for each tree.
-​colsample_bytree: Fraction of features to be randomly sampled for each tree.
-​reg_alpha, reg_lambda: L1 and L2 regularization terms.  
-​Performance: The optimized environmental models demonstrated exceptionally high accuracy, with the SST model, for instance, achieving an R-squared value exceeding 0.97. This robust performance ensures that the downstream shark prediction model receives highly reliable environmental inputs.
-​3. Tier 2: Shark Presence Prediction Model
-​The final stage of the cascade utilizes the predictions from the environmental models to forecast shark presence.
-​Model Type:
-​Light Gradient Boosting Machine (LightGBM) Classifier: Again, LightGBM was chosen for its excellent performance in classification tasks, its ability to handle imbalanced datasets (often seen in species presence/absence), and its interpretability.
-​Feature Set: This model's features are the primary geographical and temporal components, augmented by the predicted environmental conditions from Tier 1:
-​latitude, longitude, day_sin, day_cos
-​predicted_sst (from Tier 1)
-​predicted_ssha (from Tier 1)
-​predicted_chlor_a (from Tier 1)
-​Training Data: The classifier was trained on the integrated dataset of shark presence (actual sightings) and pseudo-absence records (strategically generated non-sightings) from the OBIS dataset (2020-2025). Each record was augmented with its corresponding historical environmental conditions.
-​Target Variable: presence (binary: 1 for presence, 0 for absence).
-​Hyperparameter Tuning (Optuna):
-​Methodology: Similar to Tier 1, Optuna was used to optimize the classifier's hyperparameters.
-​Objective Function: The primary objective was to maximize the Area Under the Receiver Operating Characteristic Curve (AUC-ROC) score, which is a robust metric for classification models, especially with imbalanced datasets.
-​Key Parameters Optimized:
-​n_estimators, learning_rate, num_leaves, max_depth, min_child_samples, subsample, colsample_bytree, reg_alpha, reg_lambda (similar to regressors).
-​scale_pos_weight: This crucial parameter was specifically tuned to handle the inherent imbalance between shark presence and absence records in the training data, giving more weight to the less frequent "presence" class.
-​Performance: The optimized shark presence classifier achieved an outstanding AUC-ROC score exceeding 0.99. This indicates that the model has learned to powerfully discriminate between environmental conditions associated with shark presence and absence, providing highly reliable probability estimates for potential shark hotspots.
-​4. Robustness and Scalability
-​Robust Scaling (SSHA): For the SSHA model, a RobustScaler was specifically applied during preprocessing and integrated into the model saving/loading process. This scaler is less prone to outliers than standard scalers, making the SSHA predictions more stable and scientifically plausible, especially when dealing with extreme eddy events.
-​Model Persistence: All trained models (including the SSHA RobustScaler) were saved using joblib. This allows for efficient loading and deployment within our prediction pipeline without retraining, ensuring that the web application can provide rapid, real-time forecasts.
-​In summary, the "Sharko" predictive model stack represents a carefully designed and rigorously optimized system that leverages cutting-edge machine learning techniques and extensive satellite data to provide unprecedented insights into shark habitat prediction.
+Detailed Description of the "Sharko" Predictive Model Stack (Australia)
+
+The "Sharko" project employs a two-family model stack, trained and validated specifically on Australian shark records and ocean conditions, designed to answer "how likely is a shark at this position on this date" for any date, past or future.
+
+1. Overall Architecture: Two Model Families, One Predictor
+
+Rather than a single chained pipeline, the project trains two separate families of classifiers per species, and a predictor (au/predictor.py) automatically picks which one to use based on how far ahead the requested date is:
+
+- Daily models (models/*.joblib): trained directly on real, day-specific satellite ocean conditions. Used for dates with real satellite data on disk ("observed" mode) or within the ~9-day official ocean forecast ("forecast" mode).
+
+- Seasonal models (models/seasonal/*.joblib): the same architecture and features, but trained on typical/climatological ocean conditions for each place and week of year instead of real daily data. Used for dates further into the future ("outlook" and "typical" modes), including years-ahead dates where no real measurement can exist yet.
+
+Both families predict shark presence/absence directly from ocean and bathymetry conditions; there is no intermediate regression stage predicting SST/sea level/chlorophyll first. Those are simply input features, taken from real satellite data (daily models) or from climatology (seasonal models).
+
+2. Candidate Models and Selection
+
+For each species (Tiger Shark, Bull Shark, Great White Shark, and a pooled "any shark" model), three candidate classifiers are trained and compared:
+
+- GLM: logistic regression with quadratic terms, the classic MaxEnt-style species-distribution baseline.
+
+- RandomForest.
+
+- LightGBM, tuned per species with Optuna (an open-source hyperparameter optimisation framework), searching parameters such as n_estimators, learning_rate, num_leaves, max_depth, min_child_samples, subsample, colsample_bytree, and the L1/L2 regularisation terms (reg_alpha, reg_lambda).
+
+The candidate with the best spatial cross-validation AUC (see below) is retrained on all available data and saved as the production model bundle. RandomForest won for the pooled "any shark" model; LightGBM won for Tiger Shark, Bull Shark and Great White Shark.
+
+3. Honest Evaluation Method
+
+- Spatial block cross-validation: Australia is divided into 2x2 degree blocks, and whole blocks are held out during cross-validation (5 folds), so reported accuracy reflects performance on places the model never saw during training, not just nearby, correlated points. Blocks are dealt out so every fold gets a fair share of real sightings, since sightings are heavily clustered geographically.
+
+- Future test: a separate model is trained only on 2020-2024 data and evaluated against real 2025-2026 sightings, checking that the model still works forward in time, not just across space.
+
+- Metrics: ROC-AUC (0.5 = random, 0.8 = good, 0.9 = excellent), PR-AUC, and TSS (True Skill Statistic).
+
+4. Feature Set (10 inputs, shared by every species model)
+
+sst_c (sea temperature), sst_front (temperature front, a spatial gradient), chl_log10 (chlorophyll, log10), sla_m (sea level anomaly), adt_m (dynamic topography), current_ms (current speed), depth_m, dist_coast_km, day_sin, day_cos (season). Latitude and longitude are deliberately excluded: including them lets the model learn "where the sensors, tags or beaches are" instead of the actual ocean conditions a species responds to.
+
+5. Validated Performance
+
+Spatial cross-validation AUC (tested on 2x2 degree regions the model never saw): Bull Shark 0.93 (LightGBM), All sharks 0.90 (RandomForest), Tiger Shark 0.89 (LightGBM), Great White Shark 0.81 (LightGBM).
+
+Top environmental drivers by species (from SHAP / permutation importance): Bull Shark: depth, sea temperature, distance to coast. All sharks: distance to coast, depth, sea level. Tiger Shark: depth, distance to coast, sea level, temperature. Great White Shark: sea level, depth, temperature.
+
+Threshold selection: rather than a fixed 0.5 cutoff, each species' presence/absence threshold is chosen to maximise the True Skill Statistic on the cross-validated predictions. This per-species threshold is what /predict/habitat and /predict/presence use to decide which grid cells count as likely habitat before clustering them into polygons.
+
+6. Future-Date Validation (Backtest)
+
+Trained only on data up to 2024 and tested against real 2025-2026 sightings, using only information that would have been available at the end of 2024: even the fully climatology-based "typical conditions" mode, the one used for far-future dates such as a 2030 query, scored AUC 0.98 (Tiger Shark), 0.98 (Bull Shark), 0.93 (Great White Shark) and 0.95 (All sharks) against real sightings a year or more later. The "outlook" mode (recent real conditions fading toward typical) performs similarly well from 7 to 90 days ahead. This backtest is what justifies answering a far-future date at all: the seasonal models are tested against real future sightings, not just assumed to generalise.
+
+7. Known-Range Gating
+
+Independent of the ocean-conditions model itself, a nearest-neighbour lookup against each species' real 2020-2026 sightings ensures a species is only ever predicted as present within 500 km of somewhere it has actually been recorded. This prevents "the water looks similar" false positives far outside a species' known range, such as predicting Great White Shark habitat in tropical northern Australian waters purely because the temperature happens to match.
+
+8. Model Persistence and Serving
+
+Each model bundle (models/<name>_model.joblib and models/seasonal/<name>_model.joblib) stores the fitted classifier, its exact feature list and order, its tuned decision threshold, its cross-validation metrics, and its feature importances, saved with joblib. All eight bundles (four daily, four seasonal) are loaded once by au/predictor.py when the API starts, so requests are served without any retraining or per-request model loading.
+
+Note on the earlier, worldwide version of this project: it used a different architecture, a chained pipeline of independent SST/SSH/chlorophyll-a LightGBM regressors feeding a single generic shark-presence classifier, trained on global OBIS shark records rather than Australian-specific data. That pipeline's code is still present in the repository (index.py) for reference, but is no longer used by any live endpoint; everything described above reflects what the currently deployed models actually run.

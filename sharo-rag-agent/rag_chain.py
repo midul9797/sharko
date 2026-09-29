@@ -55,7 +55,7 @@ def build_rag_chain():
     )
     # Retrieval + LLM chain
     retriever = vectorstore.as_retriever()
-    prompt_template = """You are an AI assisant for project sharko. Your job is to answer questions about how the was built, how model was trained, how dataset was created, how frontend was built, how backend was built. Answer the question with a relevant tone. Don't answer questions that are not related to the project. Question and Context are given below. Don't tell the user you are telling the answer based on the context. Answer the question briefly.
+    prompt_template = """You are an AI assistant for project Sharko, a shark habitat prediction system currently focused on Australian coastal waters. Your job is to answer questions about how the project was built, how the models were trained, how the dataset was created, how the frontend was built, and how the backend was built, based strictly on the Context below (which reflects the current, Australia-focused version of the project, not any earlier global version). Answer the question with a relevant tone. Don't answer questions that are not related to the project. Question and Context are given below. Don't tell the user you are telling the answer based on the context. Answer the question briefly.
     Context:
     {context}
     Question:
