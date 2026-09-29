@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import video4 from "../assets/4.mp4";
+import video5 from "../assets/5.mp4";
 import { useHeroStore } from "../store/heroStore";
+import VideoPreloader from "./VideoPreloader";
 
 // Helper function to split text into characters and wrap them in spans
 const splitTextIntoChars = (element: HTMLElement | null) => {
@@ -152,6 +154,9 @@ export default function VideoHeroFour() {
         Your browser does not support the video tag.
       </video>
 
+      {/* Buffer the next chapter's video ahead of time for an instant transition */}
+      <VideoPreloader src={video5} />
+
       {/* Dark Overlay for Better Text Readability */}
       {/* <div ref={overlayRef} className="absolute inset-0 bg-black/40" /> */}
 
@@ -199,9 +204,11 @@ export default function VideoHeroFour() {
             ref={subtitleRef}
             className="mb-8 text-lg leading-relaxed text-gray-200 md:text-xl text-pretty max-w-lg ml-auto text-justify backdrop-blur-sm bg-black/40 p-6 rounded-lg font-light"
           >
-            These green blooms are phytoplankton, the foundation of the entire
-            ocean food web. Where there's phytoplankton, there are fish. And
-            where there are fish, there are seals—Sharko's prey.
+            Where the East Australian Current meets cooler water off the New
+            South Wales coast, nutrient-rich upwelling triggers phytoplankton
+            blooms visible from space as swirls of green. Phytoplankton feed
+            baitfish, baitfish draw the fur seal colonies of islands like
+            Montague Island — and that's Sharko's prey.
           </p>
 
           {/* Information Card */}
@@ -228,9 +235,10 @@ export default function VideoHeroFour() {
                   Ocean Food Web
                 </h4>
                 <p className="text-white text-sm leading-relaxed">
-                  Phytoplankton → Fish → Seals → Sharks. This invisible chain of
-                  life drives every movement in the ocean. Sharko follows the
-                  scent trail of this ancient dance.
+                  Phytoplankton → Baitfish → Seals → Sharko. This chain of
+                  life, mapped with real satellite ocean-colour and
+                  sea-surface-temperature data, drives every move she makes
+                  along the Australian coast.
                 </p>
               </div>
             </div>

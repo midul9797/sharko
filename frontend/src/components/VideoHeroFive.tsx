@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import video5 from "../assets/5.mp4";
+import video6 from "../assets/6.mp4";
 import { useHeroStore } from "../store/heroStore";
+import VideoPreloader from "./VideoPreloader";
 
 const splitTextIntoChars = (element: HTMLElement | null) => {
   if (!element) return [];
@@ -180,6 +182,9 @@ export default function VideoHeroFive() {
         className="absolute inset-0 w-full h-full object-cover"
       />
 
+      {/* Buffer the next chapter's video ahead of time for an instant transition */}
+      <VideoPreloader src={video6} />
+
       {/* Overlay */}
       <div
         ref={overlayRef}
@@ -220,11 +225,6 @@ export default function VideoHeroFive() {
             className="text-3xl md:text-4xl font-bold text-white mb-6 leading-tight"
             style={{
               textShadow: "2px 2px 8px rgba(0,0,0,0.8)",
-              background:
-                "linear-gradient(135deg, #ffffff 0%, #e0f7fa 50%, #b2ebf2 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
             }}
           >
             The Hunt Revealed
@@ -238,8 +238,9 @@ export default function VideoHeroFive() {
                   A Predicted Hotspot
                 </h2>
                 <p className="text-lg md:text-xl text-white/90 leading-relaxed">
-                  The data was right! The warm currents and the phytoplankton
-                  bloom created the perfect hunting ground.
+                  The data was right! A warm East Australian Current eddy
+                  meeting a phytoplankton bloom off the New South Wales coast
+                  created exactly the hunting ground the model predicted.
                 </p>
               </div>
             </div>
@@ -253,10 +254,12 @@ export default function VideoHeroFive() {
                   Why Her Hunt Matters
                 </h2>
                 <p className="text-lg md:text-xl text-white/90 leading-relaxed">
-                  As an apex predator, Sharko's hunt is crucial. By removing the
-                  sick or weak, she keeps prey populations healthy, prevents the
-                  spread of disease, and ensures no single species overwhelms
-                  the ecosystem. A healthy ocean needs sharks.
+                  As an apex predator, Sharko's hunt keeps Australia's marine
+                  ecosystems in balance — removing the sick and weak protects
+                  fish and seal populations from disease and overpopulation.
+                  Great White Sharks have been fully protected under Australian
+                  law since the 1990s: a healthy Australian coast needs sharks
+                  like her.
                 </p>
               </div>
             </div>

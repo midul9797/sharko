@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import video2 from "../assets/2.mp4";
+import video3 from "../assets/3.mp4";
 import { useHeroStore } from "../store/heroStore";
+import VideoPreloader from "./VideoPreloader";
 
 // Helper function to split text into characters and wrap them in spans
 const splitTextIntoChars = (element: HTMLElement | null) => {
@@ -151,6 +153,9 @@ export default function VideoHeroTwo() {
         Your browser does not support the video tag.
       </video>
 
+      {/* Buffer the next chapter's video ahead of time for an instant transition */}
+      <VideoPreloader src={video3} />
+
       {/* Dark Overlay for Better Text Readability */}
       {/* <div ref={overlayRef} className="absolute inset-0 bg-black/40" /> */}
 
@@ -190,7 +195,7 @@ export default function VideoHeroTwo() {
             ref={titleRef}
             className="mb-8 text-2xl font-extrabold leading-tight text-white md:text-3xl lg:text-4xl text-balance tracking-tight"
           >
-            Clue #1: The Invisible Map
+            Clue #1: The East Australian Current
           </h3>
 
           {/* Subtitle */}
@@ -198,11 +203,13 @@ export default function VideoHeroTwo() {
             ref={subtitleRef}
             className="mb-8 text-lg leading-relaxed text-gray-200 md:text-xl text-pretty max-w-lg ml-auto text-justify backdrop-blur-sm bg-black/40 p-6 rounded-lg font-light"
           >
-            What if I told you Sharko has a GPS system that's millions of years
-            old? She navigates using invisible ocean currents - like magical
-            underwater rivers that flow hot and cold. Scientists use
-            super-powered satellites to peek into her secret world and decode
-            these ancient pathways!
+            Sharko's GPS is older than any satellite — the East Australian
+            Current, the same warm river of water that swept Nemo down the
+            coast. It flows south from the Coral Sea past Queensland and New
+            South Wales, and Sharko rides it like a highway. CSIRO and
+            Australia's Integrated Marine Observing System (IMOS) track its
+            sea-surface temperature by satellite to map these pathways in real
+            time.
           </p>
 
           {/* Key Insight */}
@@ -229,9 +236,10 @@ export default function VideoHeroTwo() {
                   Key Insight
                 </h4>
                 <p className="text-white text-sm leading-relaxed">
-                  Predicting their location matters because it's the first step
-                  to understanding their behavior without needing to see the
-                  shark itself. We can anticipate their long journeys.
+                  Predicting where Sharko will be starts with reading the
+                  current she's riding — the first step to understanding her
+                  behaviour along the Australian coast without ever needing to
+                  see her.
                 </p>
               </div>
             </div>

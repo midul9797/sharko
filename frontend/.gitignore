@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Env files with real secrets — keep only .env.example in git
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -23,3 +28,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Local backups of pre-compression video assets
+src/assets/originals_backup/

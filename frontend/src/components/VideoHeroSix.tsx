@@ -34,7 +34,7 @@ export default function VideoHeroSix() {
     fishermen: {
       title: "For Fishermen",
       description:
-        "Fisheries can use these hotspot maps to avoid areas with high shark activity. This reduces accidental 'bycatch,' saving sharks and saving fishermen time and money on damaged gear.",
+        "Australian fisheries use real-time hotspot maps like this one to avoid areas with high shark activity, reducing accidental bycatch and saving both sharks and fishing gear.",
       icon: "🎣",
       color: "from-blue-500/20 to-cyan-500/20",
       borderColor: "border-blue-400/30",
@@ -42,7 +42,7 @@ export default function VideoHeroSix() {
     conservationists: {
       title: "For Conservationists",
       description:
-        "Scientists and policymakers can use this data to identify and establish Marine Protected Areas (MPAs), safeguarding the critical habitats sharks need to feed and reproduce.",
+        "Researchers and policymakers use tracking data like Sharko's to help define Marine Protected Areas — such as the Great Barrier Reef and Ningaloo Marine Parks — that safeguard the habitats sharks need to feed and breed.",
       icon: "🌊",
       color: "from-emerald-500/20 to-teal-500/20",
       borderColor: "border-emerald-400/30",
@@ -50,7 +50,7 @@ export default function VideoHeroSix() {
     public: {
       title: "For Public Safety",
       description:
-        "Coastal managers can issue more accurate beach advisories, informing swimmers when shark activity is naturally higher near the shore, increasing safety through awareness, not fear.",
+        "NSW's real SharkSmart network turns satellite and acoustic tag detections into instant beach alerts, letting swimmers know when tagged sharks like Sharko are nearby — safety through awareness, not fear.",
       icon: "🏖️",
       color: "from-amber-500/20 to-orange-500/20",
       borderColor: "border-amber-400/30",
@@ -151,7 +151,8 @@ export default function VideoHeroSix() {
       {/* Back Button - Top Left */}
       <div className="absolute top-6 left-6 z-20">
         <button
-          onClick={() => setCurrentHero("hero6")}
+          ref={backButtonRef}
+          onClick={() => setCurrentHero("hero5")}
           className="group relative overflow-hidden bg-white/10 hover:bg-white/20 text-white px-6 py-3 text-sm font-medium rounded-full border border-white/30 shadow-lg transition-all duration-300 transform hover:scale-105 hover:cursor-pointer"
         >
           <span className="relative z-10 flex items-center gap-2">
@@ -182,11 +183,6 @@ export default function VideoHeroSix() {
             className="text-3xl md:text-4xl font-bold text-white mb-4 leading-tight"
             style={{
               textShadow: "2px 2px 8px rgba(0,0,0,0.8)",
-              background:
-                "linear-gradient(135deg, #ffffff 0%, #e0f7fa 50%, #b2ebf2 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
             }}
           >
             From Prediction to Protection
@@ -196,9 +192,11 @@ export default function VideoHeroSix() {
           <div ref={contentRef} className="mb-6">
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 shadow-2xl mb-4">
               <p className="text-lg md:text-xl text-white/90 leading-relaxed">
-                This is where data changes the world. Improved predictions of
-                shark locations directly affect human decisions and create a
-                safer ocean for everyone.
+                This is where data changes the world. In New South Wales, the
+                real SharkSmart program uses satellite tags just like Sharko's
+                — plus listening stations along the coast — to turn shark
+                science into decisions that keep Australia's waters safer for
+                everyone.
               </p>
             </div>
           </div>
@@ -270,7 +268,7 @@ export default function VideoHeroSix() {
                     d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
                   />
                 </svg>
-                Explore the Global Hotspots
+                Explore Australia's Hotspots
               </span>
               <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-cyan-400 opacity-0 group-hover:opacity-20 transition-opacity duration-500" />
             </button>

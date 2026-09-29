@@ -3,7 +3,12 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import video1 from "../assets/1.mp4";
+import video2 from "../assets/2.mp4";
 import { useHeroStore } from "../store/heroStore";
+import VideoPreloader from "./VideoPreloader";
+
+// How long to let the intro sit on screen before auto-advancing into the journey.
+const AUTO_ADVANCE_DELAY_MS = 8000;
 
 // Helper function to split text into characters and wrap them in spans
 const splitTextIntoChars = (element: HTMLElement | null) => {
@@ -104,7 +109,16 @@ export default function VideoHero() {
       );
     }, heroRef);
 
-    return () => ctx.revert();
+    // Auto-start Sharko's journey: no click required, the story carries on by itself.
+    const autoAdvanceTimer = setTimeout(() => {
+      setCurrentHero("hero2");
+    }, AUTO_ADVANCE_DELAY_MS);
+
+    return () => {
+      ctx.revert();
+      clearTimeout(autoAdvanceTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleButtonHover = (isHovering: boolean) => {
@@ -138,6 +152,9 @@ export default function VideoHero() {
         Your browser does not support the video tag.
       </video>
 
+      {/* Buffer the next chapter's video ahead of time for an instant transition */}
+      <VideoPreloader src={video2} />
+
       {/* Dark Overlay for Better Text Readability */}
       {/* <div ref={overlayRef} className="absolute inset-0 bg-black/40" /> */}
 
@@ -152,7 +169,7 @@ export default function VideoHero() {
             ref={titleRef}
             className="mb-8 text-2xl font-extrabold leading-tight text-white md:text-3xl lg:text-4xl text-balance tracking-tight"
           >
-            Meet Sharko: A Guardian of the Ocean
+            Meet Sharko: Guardian of Australia's Coast
           </h3>
 
           {/* Subtitle */}
@@ -160,10 +177,12 @@ export default function VideoHero() {
             ref={subtitleRef}
             className="mb-12 text-lg leading-relaxed text-gray-200 md:text-xl text-pretty max-w-lg ml-auto text-justify backdrop-blur-sm bg-black/40 p-6 rounded-lg font-light"
           >
-            For millions of years, sharks have kept our oceans healthy. They are
-            not mindless hunters; they are vital predators who maintain the
-            delicate balance of marine life. This is the story of why they
-            matter.
+            Near South Australia's Neptune Islands — one of the world's few
+            Great White Shark aggregation sites — researchers fitted a young
+            female with a satellite tag and named her Sharko. For millions of
+            years, sharks like her have kept Australian waters healthy, patrolling
+            everywhere from the Great Barrier Reef to Ningaloo. This is her
+            journey, told through real tracking data.
           </p>
 
           {/* Call-to-Action Button */}
@@ -180,7 +199,7 @@ export default function VideoHero() {
 
               {/* Button Content */}
               <span className="relative z-10 flex items-center gap-3">
-                Uncover Her Secret World
+                Follow Her Real Journey
                 <svg
                   className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1"
                   fill="none"

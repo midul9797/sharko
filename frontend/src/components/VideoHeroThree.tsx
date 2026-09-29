@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import video3 from "../assets/3.mp4";
+import video4 from "../assets/4.mp4";
 import { useHeroStore } from "../store/heroStore";
+import VideoPreloader from "./VideoPreloader";
 
 // Helper function to split text into characters and wrap them in spans
 const splitTextIntoChars = (element: HTMLElement | null) => {
@@ -152,6 +154,9 @@ export default function VideoHeroThree() {
         Your browser does not support the video tag.
       </video>
 
+      {/* Buffer the next chapter's video ahead of time for an instant transition */}
+      <VideoPreloader src={video4} />
+
       {/* Dark Overlay for Better Text Readability */}
       {/* <div ref={overlayRef} className="absolute inset-0 bg-black/40" /> */}
 
@@ -191,7 +196,7 @@ export default function VideoHeroThree() {
             ref={titleRef}
             className="mb-8 text-2xl font-extrabold leading-tight text-white md:text-3xl lg:text-4xl text-balance tracking-tight"
           >
-            The Journey Begins - A Predictable Path
+            The Journey Begins - Down the Australian Coast
           </h3>
 
           {/* Subtitle */}
@@ -199,10 +204,11 @@ export default function VideoHeroThree() {
             ref={subtitleRef}
             className="mb-8 text-lg leading-relaxed text-gray-200 md:text-xl text-pretty max-w-lg ml-auto text-justify backdrop-blur-sm bg-black/40 p-6 rounded-lg font-light"
           >
-            Sharko moves with purpose through the vast blue. Every turn, every
-            dive follows an ancient blueprint written in her DNA. She's not lost
-            - she's exactly where she needs to be, and our technology lets us
-            peek into her master plan.
+            Sharko moves with purpose from the Coral Sea toward New South Wales,
+            riding the East Australian Current south each summer. Every turn
+            follows a route her species has run for millions of years. Each
+            time her satellite tag breaks the surface, it reports her real
+            position back to researchers on shore.
           </p>
 
           {/* Live Stat */}
@@ -217,9 +223,9 @@ export default function VideoHeroThree() {
                 </div>
                 <div>
                   <h4 className="text-green-300 font-semibold text-sm uppercase tracking-wide">
-                    Live Stat
+                    Live Tag Data
                   </h4>
-                  <p className="text-white text-sm">Current Speed</p>
+                  <p className="text-white text-sm">Cruising Speed</p>
                 </div>
               </div>
               <div className="text-right">

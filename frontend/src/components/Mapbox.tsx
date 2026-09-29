@@ -14,8 +14,17 @@ import { Link } from "react-router-dom";
 import AIAssistant from "./AIAssistant";
 
 // Set the access token
-const accessToken =
-  "pk.eyJ1IjoibXJtOTc5NyIsImEiOiJjamY5cmRmODAwbXNkMnFxb3plajBjcnRjIn0.QILdHy9GAM11PBUs9n5e7g";
+const accessToken = import.meta.env.VITE_MAPBOX_TOKEN as string;
+
+// Sharks tracked by this dataset cluster around Australian waters, so once a
+// prediction lands we fly the globe there.
+const AUSTRALIA_CENTER: [number, number] = [133.7751, -25.2744];
+const AUSTRALIA_ZOOM = 3.5;
+
+// Wide, whole-earth starting view so the Australia fly-in is visible after the
+// first prediction completes, instead of the globe just appearing there.
+const GLOBE_START_CENTER: [number, number] = [30, 10];
+const GLOBE_START_ZOOM = 0.8;
 
 export default function Mapbox() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -35,6 +44,7 @@ export default function Mapbox() {
   const [sharksDict, setSharksDict] = useState<any[] | null>(null);
   const [selectedSharkDetails, setSelectedSharkDetails] = useState<any>(null);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState<boolean>(false);
+  const [isMapStyleReady, setIsMapStyleReady] = useState(false);
 
   // Load GeoJSON / clustered data
   const loadPresenceData = async (date: string) => {
@@ -135,12 +145,23 @@ export default function Mapbox() {
     try {
       mapRef.current = new mapboxgl.Map({
         container: mapContainerRef.current,
-        center: [0, 0],
-        zoom: 2,
+        style: "mapbox://styles/mapbox/standard-satellite",
+        center: GLOBE_START_CENTER,
+        zoom: GLOBE_START_ZOOM,
         antialias: false,
         preserveDrawingBuffer: true,
         maxTileCacheSize: 50,
         renderWorldCopies: false,
+        projection: "globe",
+      });
+
+      mapRef.current.on("style.load", () => {
+        mapRef.current?.setFog({});
+      });
+
+      // Only touch sources/layers once the style has actually finished loading.
+      mapRef.current.on("load", () => {
+        setIsMapStyleReady(true);
       });
 
       mapRef.current.on("error", (e) => {
@@ -160,7 +181,7 @@ export default function Mapbox() {
 
   // Update map data when data changes
   useEffect(() => {
-    if (!mapRef.current || loading) return;
+    if (!mapRef.current || loading || !isMapStyleReady) return;
 
     const currentData =
       currentlySelected === "presence"
@@ -168,6 +189,14 @@ export default function Mapbox() {
         : habitatGeoJsonData;
     console.log(habitatGeoJsonData, selectedSharkName);
     if (!currentData) return;
+
+    // Smoothly recenter the globe on Australia once a prediction is ready.
+    mapRef.current.flyTo({
+      center: AUSTRALIA_CENTER,
+      zoom: AUSTRALIA_ZOOM,
+      duration: 4000,
+      essential: true,
+    });
 
     // Remove existing layers and sources
     if (mapRef.current.getLayer("polygon-fill")) {
@@ -237,7 +266,13 @@ export default function Mapbox() {
         });
       });
     });
-  }, [presenceGeoJsonData, habitatGeoJsonData, processedFeatures, loading]);
+  }, [
+    presenceGeoJsonData,
+    habitatGeoJsonData,
+    processedFeatures,
+    loading,
+    isMapStyleReady,
+  ]);
 
   // Create custom marker element
   const createMarkerElement = (properties: any) => {
@@ -327,7 +362,8 @@ export default function Mapbox() {
               </button>
             </div>
             <div className="fixed left-8 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-3">
-              <Link to="/tag">
+              {/* Hidden for now (keep markup/code in place for later re-enable) */}
+              <Link to="/tag" className="hidden">
                 <button className="bg-blue-500/30 hover:bg-blue-500/60 text-white shadow-2xl backdrop-blur-sm border border-white/20 rounded-2xl px-6 py-6 group hover:cursor-pointer">
                   <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform inline" />
                   <span className="ml-2 font-semibold">
