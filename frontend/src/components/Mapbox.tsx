@@ -381,9 +381,10 @@ export default function Mapbox() {
                 </button>
               </Link>
 
+              {/* Hidden for now (keep markup/code in place for later re-enable) */}
               <button
                 onClick={() => setIsAIAssistantOpen(true)}
-                className="bg-green-500/30 hover:bg-green-500/60 text-white shadow-2xl backdrop-blur-sm border border-white/20 rounded-2xl px-6 py-6 group hover:cursor-pointer"
+                className="hidden bg-green-500/30 hover:bg-green-500/60 text-white shadow-2xl backdrop-blur-sm border border-white/20 rounded-2xl px-6 py-6 group hover:cursor-pointer"
               >
                 <MessageCircle className="w-6 h-6 group-hover:scale-110 transition-transform inline" />
                 <span className="ml-2 font-semibold">AI Assistant</span>
