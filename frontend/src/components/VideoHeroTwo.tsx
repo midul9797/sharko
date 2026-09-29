@@ -146,6 +146,7 @@ export default function VideoHeroTwo() {
         className="absolute inset-0 h-full w-full object-cover"
         style={{ filter: "brightness(0.7)" }}
         autoPlay
+        loop
         muted
         playsInline
       >

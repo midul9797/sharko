@@ -26,6 +26,15 @@ const AUSTRALIA_ZOOM = 3.5;
 const GLOBE_START_CENTER: [number, number] = [30, 10];
 const GLOBE_START_ZOOM = 0.8;
 
+// Local (not UTC) today, formatted for the date input and the predict API.
+const getTodayDateString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function Mapbox() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -36,7 +45,7 @@ export default function Mapbox() {
   const [currentlySelected, setCurrentlySelected] = useState<string | null>(
     "presence"
   );
-  const [selectedDate, setSelectedDate] = useState<string>("2025-09-01");
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSharkPicker, setShowSharkPicker] = useState<boolean>(false);

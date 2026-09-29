@@ -7,9 +7,6 @@ import video2 from "../assets/2.mp4";
 import { useHeroStore } from "../store/heroStore";
 import VideoPreloader from "./VideoPreloader";
 
-// How long to let the intro sit on screen before auto-advancing into the journey.
-const AUTO_ADVANCE_DELAY_MS = 8000;
-
 // Helper function to split text into characters and wrap them in spans
 const splitTextIntoChars = (element: HTMLElement | null) => {
   if (!element) return [];
@@ -109,16 +106,7 @@ export default function VideoHero() {
       );
     }, heroRef);
 
-    // Auto-start Sharko's journey: no click required, the story carries on by itself.
-    const autoAdvanceTimer = setTimeout(() => {
-      setCurrentHero("hero2");
-    }, AUTO_ADVANCE_DELAY_MS);
-
-    return () => {
-      ctx.revert();
-      clearTimeout(autoAdvanceTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => ctx.revert();
   }, []);
 
   const handleButtonHover = (isHovering: boolean) => {
